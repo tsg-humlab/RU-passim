@@ -101,6 +101,7 @@ urlpatterns = [
     re_path(r'^tools/sermons/$', passim.seeker.views.do_sermons, name='do_sermons'),
     re_path(r'^tools/ssg/$', passim.seeker.views.do_ssgmigrate, name='do_ssgmigrate'),
     re_path(r'^tools/huwa/$', passim.seeker.views.do_huwa, name='do_huwa'),
+
     re_path(r'^tools/sermones/reset$', passim.dct.views.sermones_reset, name='sermones_reset'),
 
     re_path(r'^search/sermon', SermonListView.as_view(), name='search_sermon'),
@@ -484,11 +485,6 @@ urlpatterns = [
     # ========================= PLUGIN ============================================================
     re_path(r'^plugin/sermboard/$', passim.plugin.views.sermonboard, name='sermonboard'),
     path('plugin/apply/', BoardApply.as_view(),  name='board_apply'),
-    ## My plotly apps
-    #path('simple', TemplateView.as_view(template_name='plugin/simple.html'), name="simple"),
-    #path('plugin/dashboard', TemplateView.as_view(template_name='plugin/dashboard.html'), name="dashboard"),
-    ## Needed for django-plotly-dash
-    #path('django_plotly_dash/', include('django_plotly_dash.urls')),
 
     # =============================================================================================
     re_path(r'^definitions$', RedirectView.as_view(url='/'+pfx+'admin/'), name='definitions'),

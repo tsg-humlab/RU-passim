@@ -6733,8 +6733,8 @@ def reader_CPPM_AF(request):
     # This is step 1, later steps will follow.    
 
     # Can only be done by a super-user
-    if request.user.is_superuser:        
-        pass
+    if not request.user.is_superuser:        
+        return redirect('home')
 
     # Read the JSON file from MEDIA_DIR   
     cppm_t_read = os.path.abspath(os.path.join(MEDIA_DIR, 'cppm_texts_mapped_authors.json')) # cppm_texts_mapped_authors.json
@@ -7133,8 +7133,8 @@ def reader_CPPM_manu(request):
     # Only the records that are coded as "False" need to be imported, the rest is already in the database. 
     
     # Can only be done by a super-user
-    if request.user.is_superuser:        
-        pass
+    if not request.user.is_superuser:        
+        return redirect('home')
 
     # Read the JSON file from MEDIA_DIR   
     man_u_read = os.path.abspath(os.path.join(MEDIA_DIR, 'manuscripts_uniform.json')) 
@@ -7372,7 +7372,6 @@ def reader_CPPM_manu(request):
  
     # What we return is simply the home page
     return redirect('home')
-
 
 def reader_CPPM_eqset(request):
 
@@ -8076,8 +8075,7 @@ def reader_CPPM_manifestations_f(request):
 
     # Can only be done by a super-user
     if not request.user.is_superuser:        
-        # Just go home
-        return redirect("home")
+        return redirect('home')
 
     # Read the JSON file from MEDIA_DIR   
     filename = os.path.join(MEDIA_DIR, 'manuscripts_uniform.json')

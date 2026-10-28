@@ -1065,11 +1065,6 @@ def sync_passim(request):
                }
     template_name = 'seeker/syncpassim.html'
     context = get_application_context(request, context)
-    #context['is_app_uploader'] = user_is_ingroup(request, app_uploader)
-    #context['is_app_editor'] = user_is_ingroup(request, app_editor)
-    #context['is_enrich_editor'] = user_is_ingroup(request, enrich_editor)
-    #context['is_app_moderator'] = user_is_superuser(request) or user_is_ingroup(request, app_moderator)
-    #context['is_superuser'] = user_is_superuser(request)
 
     # Add the information in the 'context' of the web page
     return render(request, template_name, context)
@@ -1173,41 +1168,43 @@ def sync_progress(request):
     data = {'status': 'preparing'}
 
     try:
-        # Get the user
-        username = request.user.username
-        # Get the synchronization type
-        get = request.GET
-        synctype = ""
-        if 'synctype' in get:
-            synctype = get['synctype']
-
-        if synctype == '':
-            # Formulate a response
-            data['status'] = 'error'
-            data['msg'] = "no sync type specified" 
-
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            data['status'] = "no access"
         else:
-            # Formulate a response
-            data['status'] = 'UNKNOWN'
+            # Get the user
+            username = request.user.username
+            # Get the synchronization type
+            get = request.GET
+            synctype = ""
+            if 'synctype' in get:
+                synctype = get['synctype']
 
-            # Get the appropriate status object
-            # sleep(1)
-            oStatus = Status.objects.filter(user=username, type=synctype).first()
-
-            # Check what we received
-            if oStatus == None:
-                # There is no status object for this type
+            if synctype == '':
+                # Formulate a response
                 data['status'] = 'error'
-                data['msg'] = "Cannot find status for {}/{}".format(
-                    username, synctype)
-            else:
-                # Get the last status information
-                data['status'] = oStatus.status
-                data['msg'] = oStatus.msg
-                data['count'] = oStatus.count
+                data['msg'] = "no sync type specified" 
 
-        # Return this response
-        return JsonResponse(data)
+            else:
+                # Formulate a response
+                data['status'] = 'UNKNOWN'
+
+                # Get the appropriate status object
+                # sleep(1)
+                oStatus = Status.objects.filter(user=username, type=synctype).first()
+
+                # Check what we received
+                if oStatus == None:
+                    # There is no status object for this type
+                    data['status'] = 'error'
+                    data['msg'] = "Cannot find status for {}/{}".format(
+                        username, synctype)
+                else:
+                    # Get the last status information
+                    data['status'] = oStatus.status
+                    data['msg'] = oStatus.msg
+                    data['count'] = oStatus.count
+
     except:
         oErr.DoError("sync_start error")
         data = {'status': 'error'}
@@ -1383,15 +1380,19 @@ def redo_zotero(request):
     data = {'status': 'preparing'}
 
     try:
-        if request.method == 'GET':
-            oBack, msg = Litref.sync_zotero(True)
-        if oBack != None and 'status' in oBack:
-            data['status'] = "ok"
-            data['count'] = oBack
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            data['status'] = "no access"
         else:
-            data['status'] = "error"
-            data['msg'] = msg
-            data['html'] = msg
+            if request.method == 'GET':
+                oBack, msg = Litref.sync_zotero(True)
+            if oBack != None and 'status' in oBack:
+                data['status'] = "ok"
+                data['count'] = oBack
+            else:
+                data['status'] = "error"
+                data['msg'] = msg
+                data['html'] = msg
     except:
         oErr.DoError("redo_zotero error")
         data = {'status': 'error'}
@@ -1400,52 +1401,54 @@ def redo_zotero(request):
     return JsonResponse(data)
 
 def do_clavis(request):
-    # Create a regular expression
-    r_number = re.compile( r'^[[]?(\d+)[]]?')
+    # Authentication
+    if user_is_ingroup(request, app_editor):
+        # Create a regular expression
+        r_number = re.compile( r'^[[]?(\d+)[]]?')
 
-    # Walk the whole signature list
-    with transaction.atomic():
-        for obj in Signature.objects.all():
-            # Check the type
-            if obj.editype == "cl":
-                # This is clavis -- get the code
-                code = obj.code
-                if r_number.match(code):
-                    # This is only a number
-                    obj.code = "CPPM I {}".format(code)
-                    obj.save()
-                else:
-                    # Break it up into spaced items
-                    arCode = code.split(" ")
-                    if len(arCode) > 1:
-                        if arCode[1] != "I":
-                            if len(arCode) > 2:
-                                iStop = True
-                            arCode[0] = arCode[0] + " I"
-                            obj.code = " ".join(arCode)
-                            obj.save()
+        # Walk the whole signature list
+        with transaction.atomic():
+            for obj in Signature.objects.all():
+                # Check the type
+                if obj.editype == "cl":
+                    # This is clavis -- get the code
+                    code = obj.code
+                    if r_number.match(code):
+                        # This is only a number
+                        obj.code = "CPPM I {}".format(code)
+                        obj.save()
+                    else:
+                        # Break it up into spaced items
+                        arCode = code.split(" ")
+                        if len(arCode) > 1:
+                            if arCode[1] != "I":
+                                if len(arCode) > 2:
+                                    iStop = True
+                                arCode[0] = arCode[0] + " I"
+                                obj.code = " ".join(arCode)
+                                obj.save()
                     
-    # Walk the whole gold-signature list
-    with transaction.atomic():
-        for obj in SermonSignature.objects.all():
-            # Check the type
-            if obj.editype == "cl":
-                # This is clavis -- get the code
-                code = obj.code
-                if r_number.match(code):
-                    # This is only a number
-                    obj.code = "CPPM I {}".format(code)
-                    obj.save()
-                else:
-                    # Break it up into spaced items
-                    arCode = code.split(" ")
-                    if len(arCode) > 1:
-                        if arCode[1] != "I":
-                            if len(arCode) > 2:
-                                iStop = True
-                            arCode[0] = arCode[0] + " I"
-                            obj.code = " ".join(arCode)
-                            obj.save()
+        # Walk the whole gold-signature list
+        with transaction.atomic():
+            for obj in SermonSignature.objects.all():
+                # Check the type
+                if obj.editype == "cl":
+                    # This is clavis -- get the code
+                    code = obj.code
+                    if r_number.match(code):
+                        # This is only a number
+                        obj.code = "CPPM I {}".format(code)
+                        obj.save()
+                    else:
+                        # Break it up into spaced items
+                        arCode = code.split(" ")
+                        if len(arCode) > 1:
+                            if arCode[1] != "I":
+                                if len(arCode) > 2:
+                                    iStop = True
+                                arCode[0] = arCode[0] + " I"
+                                obj.code = " ".join(arCode)
+                                obj.save()
 
     # Return an appropriate page
     return home(request)
@@ -1457,86 +1460,91 @@ def do_stype(request):
     phases = []
     try:
         assert isinstance(request, HttpRequest)
-        # Specify the template
-        template_name = 'tools.html'
-        # Define the initial context
-        context =  {'title':'RU-passim-tools',
-                    'year':get_current_datetime().year,
-                    'pfx': APP_PREFIX,
-                    'site_url': admin.site.site_url}
-        context['is_app_uploader'] = user_is_ingroup(request, app_uploader)
-        context['is_app_editor'] = user_is_ingroup(request, app_editor)
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            # Go home
+            return redirect(reverse('home'))
+        else:
+            # Specify the template
+            template_name = 'tools.html'
+            # Define the initial context
+            context =  {'title':'RU-passim-tools',
+                        'year':get_current_datetime().year,
+                        'pfx': APP_PREFIX,
+                        'site_url': admin.site.site_url}
+            context['is_app_uploader'] = user_is_ingroup(request, app_uploader)
+            context['is_app_editor'] = user_is_ingroup(request, app_editor)
 
-        # Only passim uploaders can do this
-        if not context['is_app_uploader']: return reverse('home')
+            # Only passim uploaders can do this
+            if not context['is_app_uploader']: return reverse('home')
 
-        # Indicate the necessary tools sub-part
-        context['tools_part'] = "Repair Stype definitions"
+            # Indicate the necessary tools sub-part
+            context['tools_part'] = "Repair Stype definitions"
 
-        # Process this visit
-        context['breadcrumbs'] = get_breadcrumbs(request, "Stype", True)
+            # Process this visit
+            context['breadcrumbs'] = get_breadcrumbs(request, "Stype", True)
 
-        # Create list to be returned
-        result_list = []
+            # Create list to be returned
+            result_list = []
 
-        # Phase 1: Manuscript
-        if '1' in phases:
-            with transaction.atomic():
-                added = 0
-                for item in Manuscript.objects.all():
-                    if item.stype == "-":
-                        item.stype = STYPE_IMPORTED
-                        item.save()
-                        added += 1
-                result_list.append({'part': 'Manuscript changed stype', 'result': added})
-
-        # Phase 2: SermonDescr
-        if '2' in phases:
-            with transaction.atomic():
-                added = 0
-                for item in SermonDescr.objects.all():
-                    if item.stype == "-":
-                        item.stype = STYPE_IMPORTED
-                        item.save()
-                        added += 1
-                result_list.append({'part': 'SermonDescr changed stype', 'result': added})
-
-        # Phase 3: SermonGold
-        if '3' in phases:
-            with transaction.atomic():
-                added = 0
-                for item in SermonGold.objects.all():
-                    if item.stype == "-":
-                        item.stype = STYPE_IMPORTED
-                        item.save()
-                        added += 1
-                result_list.append({'part': 'SermonGold changed stype', 'result': added})
-
-        # Phase 4: EqualGold
-        if '4' in phases:
-            with transaction.atomic():
-                added = 0
-                for item in EqualGold.objects.all():
-                    if item.stype == "-":
-                        item.stype = STYPE_IMPORTED
-                        item.save()
-                        added += 1
-                    else:
-                        # Check i it is in Action
-                        if item.sgcount > 1 or Action.objects.filter(itemtype='EqualGold', itemid=item.id).exists():
-                            item.stype = STYPE_EDITED
+            # Phase 1: Manuscript
+            if '1' in phases:
+                with transaction.atomic():
+                    added = 0
+                    for item in Manuscript.objects.all():
+                        if item.stype == "-":
+                            item.stype = STYPE_IMPORTED
                             item.save()
                             added += 1
-                        elif item.equalgold_src.all().exists():
-                            item.stype = STYPE_EDITED
+                    result_list.append({'part': 'Manuscript changed stype', 'result': added})
+
+            # Phase 2: SermonDescr
+            if '2' in phases:
+                with transaction.atomic():
+                    added = 0
+                    for item in SermonDescr.objects.all():
+                        if item.stype == "-":
+                            item.stype = STYPE_IMPORTED
                             item.save()
                             added += 1
-                result_list.append({'part': 'EqualGold changed stype', 'result': added})
+                    result_list.append({'part': 'SermonDescr changed stype', 'result': added})
 
-        context['result_list'] = result_list
+            # Phase 3: SermonGold
+            if '3' in phases:
+                with transaction.atomic():
+                    added = 0
+                    for item in SermonGold.objects.all():
+                        if item.stype == "-":
+                            item.stype = STYPE_IMPORTED
+                            item.save()
+                            added += 1
+                    result_list.append({'part': 'SermonGold changed stype', 'result': added})
+
+            # Phase 4: EqualGold
+            if '4' in phases:
+                with transaction.atomic():
+                    added = 0
+                    for item in EqualGold.objects.all():
+                        if item.stype == "-":
+                            item.stype = STYPE_IMPORTED
+                            item.save()
+                            added += 1
+                        else:
+                            # Check i it is in Action
+                            if item.sgcount > 1 or Action.objects.filter(itemtype='EqualGold', itemid=item.id).exists():
+                                item.stype = STYPE_EDITED
+                                item.save()
+                                added += 1
+                            elif item.equalgold_src.all().exists():
+                                item.stype = STYPE_EDITED
+                                item.save()
+                                added += 1
+                    result_list.append({'part': 'EqualGold changed stype', 'result': added})
+
+            context['result_list'] = result_list
     
-        # Render and return the page
-        return render(request, template_name, context)
+            # Render and return the page
+            return render(request, template_name, context)
     except:
         msg = oErr.get_error_message()
         oErr.DoError("goldtogold")
@@ -1548,6 +1556,11 @@ def do_locations(request):
     oErr = ErrHandle()
     try:
         assert isinstance(request, HttpRequest)
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            # Go home
+            return redirect(reverse('home'))
+
         # Specify the template
         template_name = 'tools.html'
         # Define the initial context
@@ -1673,6 +1686,11 @@ def do_provenance(request):
     oErr = ErrHandle()
     try:
         assert isinstance(request, HttpRequest)
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            # Go home
+            return redirect(reverse('home'))
+
         # Specify the template
         template_name = 'tools.html'
         # Define the initial context
@@ -1730,6 +1748,11 @@ def do_mext(request):
     oErr = ErrHandle()
     try:
         assert isinstance(request, HttpRequest)
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            # Go home
+            return redirect(reverse('home'))
+
         # Specify the template
         template_name = 'tools.html'
         # Define the initial context
@@ -1784,6 +1807,11 @@ def do_goldsearch(request):
     oErr = ErrHandle()
     try:
         assert isinstance(request, HttpRequest)
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            # Go home
+            return redirect(reverse('home'))
+
         # Specify the template
         template_name = 'tools.html'
         # Define the initial context
@@ -1836,6 +1864,11 @@ def do_sermons(request):
     oErr = ErrHandle()
     try:
         assert isinstance(request, HttpRequest)
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            # Go home
+            return redirect(reverse('home'))
+
         # Specify the template
         template_name = 'tools.html'
         # Define the initial context
@@ -1929,6 +1962,11 @@ def do_goldtogold(request):
     oErr = ErrHandle()
     try:
         assert isinstance(request, HttpRequest)
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            # Go home
+            return redirect(reverse('home'))
+
         # Specify the template
         template_name = 'tools.html'
         # Define the initial context
@@ -2076,6 +2114,11 @@ def do_ssgmigrate(request):
     oErr = ErrHandle()
     try:
         assert isinstance(request, HttpRequest)
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            # Go home
+            return redirect(reverse('home'))
+
         # Specify the template
         template_name = 'tools.html'
         # Define the initial context
@@ -2161,6 +2204,11 @@ def do_huwa(request):
     excel_output = "huwa_tables.xlsx"
     try:
         assert isinstance(request, HttpRequest)
+        # Authentication
+        if not user_is_ingroup(request, app_editor):
+            # Go home
+            return redirect(reverse('home'))
+
         # Specify the template
         template_name = 'tools_huwa.html'
         # Define the initial context
